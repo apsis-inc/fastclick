@@ -29,7 +29,6 @@ CLICK_DECLS
 
 FlowSwitch::FlowSwitch()
 {
-    alpha = 1;
 }
 
 FlowSwitch::~FlowSwitch()
@@ -39,19 +38,19 @@ FlowSwitch::~FlowSwitch()
 int
 FlowSwitch::configure(Vector<String> &conf, ErrorHandler *errh)
 {
-    String mode= "rr";
-    double alphad;
-    if (Args(conf, this, errh)
-       .read("MODE", mode)
-       .read_or_set("ALPHA", alphad, 1)
-       .complete() < 0)
-        return -1;
-    alpha = alphad;
-    _dsts.resize(noutputs());
-    click_chatter("%p{element} has %d routes",this,_dsts.size());
+    if (Args(this, errh).bind(conf)
+               .consume() < 0)
+		return -1;
 
-    set_mode(mode);
-    click_chatter("MODE set to %s", mode.c_str());
+    _dsts.resize(noutputs());
+
+    if (parseLb(conf, this, errh) < 0)
+            return -1;
+
+    if (Args(this, errh).bind(conf).complete() < 0)
+            return -1;
+
+    click_chatter("%p{element} has %d routes",this,_dsts.size());
 
     return 0;
 }
@@ -71,10 +70,35 @@ bool FlowSwitch::new_flow(FlowSwitchEntry* flowdata, Packet* p)
     return true;
 }
 
-
 void FlowSwitch::push_batch(int, FlowSwitchEntry* flowdata, PacketBatch* batch)
 {
     output_push_batch(flowdata->chosen_server, batch);
+}
+
+int
+FlowSwitch::handler(int op, String& s, Element* e, const Handler* h, ErrorHandler* errh) {
+    FlowSwitch *cs = static_cast<FlowSwitch *>(e);
+    return cs->lb_handler(op, s, h->read_user_data(), h->write_user_data(), errh);
+}
+
+int
+FlowSwitch::write_handler(
+        const String &input, Element *e, void *thunk, ErrorHandler *errh) {
+	FlowSwitch *cs = static_cast<FlowSwitch *>(e);
+
+    return cs->lb_write_handler(input,thunk,errh);
+}
+
+String
+FlowSwitch::read_handler(Element *e, void *thunk) {
+	FlowSwitch *cs = static_cast<FlowSwitch *>(e);
+    return cs->lb_read_handler(thunk);
+}
+
+void
+FlowSwitch::add_handlers()
+{
+    add_lb_handlers<FlowSwitch>(this);
 }
 
 
